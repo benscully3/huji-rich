@@ -1,0 +1,35 @@
+#ifndef FICK_HPP
+#define FICK_HPP 1
+
+#include <vector>
+#include <cassert>
+
+#include <armadillo>
+
+using std::vector;
+using arma::mat;
+
+class KwisatzHaderach
+{
+public:
+
+  KwisatzHaderach
+  (const vector<double>& x_list,
+   const vector<double>& D_list);
+
+  const mat& getDerMat(void) const;
+
+  double getDerMatTerm(int i, int j) const;
+
+  mat calcTransMat(double t) const;
+
+private:
+  mat derMat_;
+};
+
+vector<double> evolve
+(const KwisatzHaderach& kh,
+ const vector<double>& y_list,
+ const double time);
+
+#endif // FICK_HPP

@@ -1,0 +1,7 @@
+#include "cell_updater.hpp"
+#include <iostream>
+#include <cmath>
+using namespace std;
+using std::function;
+
+CellUpdater::Cell

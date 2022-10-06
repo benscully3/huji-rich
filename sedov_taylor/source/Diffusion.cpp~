@@ -1,0 +1,138 @@
+#include "Diffusion.hpp"
+#include "fick.hpp"
+#include <cmath>
+
+using std::function;
+
+Diffusion::Diffusion(double eta): eta_(eta), t_prev_(0) {}
+
+namespace{
+  vector<vector<double> > serialiseCells
+    (const vector<ComputationalCell>& cells)
+  {
+    //    vector<vector<double> > res(vector<double>(cells.size()),4);
+    vector<vector<double> > res(4);
+    for(size_t i=0;i<4;++i)
+      res.at(i).resize(cells.size());
+    vector<function<double(ComputationalCell)> > func_list
+	   ({[](ComputationalCell c){return c.density;},
+	     [](ComputationalCell c){return c.pressure;},
+	     [](ComputationalCell c){return c.velocity.x;},
+	     [](ComputationalCell c){return c.velocity.y;}});
+    for(size_t i=0;i<4;++i)
+      transform(cells.begin(),
+		cells.end(),
+		res.at(i).begin(),
+		func_list[i]);
+    return res;
+  }
+
+  vector<double> calcMidPoints(const vector<double>& x_list)
+  {
+    vector<double> res(x_list.size()-1);
+    transform(x_list.begin(),
+	      x_list.end()-1,
+	      x_list.begin()+1,
+	      res.begin(),
+	      [](double x, double y){return 0.5*(x+y);});
+    return res;
+  }
+
+  vector<double> binOp
+    (const vector<double>& u,
+     const vector<double>& v,
+     const function<double(double, double)>& f)
+  {
+    assert(u.size()==v.size());
+    vector<double> res(u.size());
+    transform(u.begin(),
+	      u.end(),
+	      v.begin(),
+	      res.begin(),
+	      f);	      
+    return res;
+  }
+
+  vector<double> uneOp
+    (const vector<double>& v,
+     const function<double(double)>& f)
+  {
+    vector<double> res(v.size());
+    transform(v.begin(),
+	      v.end(),
+	      res.begin(),
+	      f);
+    return res;
+  }
+
+  vector<double> operator*(double s, const vector<double>& v)
+  {
+    return uneOp(v,[&s](double x){return s*x;});
+  }
+
+  vector<double> operator/(const vector<double>& u,
+			   const vector<double>& v)
+  {
+    return binOp(u,v,[](double x, double y){return x/y;});
+  }
+
+  vector<double> sqrt(const vector<double>& v)
+  {
+    return uneOp(v, [](double x){return std::sqrt(x);});
+  }
+
+  vector<double> operator*
+    (const vector<double>& u,
+     const vector<double>& v)
+  {
+    return binOp(u,v,[](double x, double y){return x*y;});
+  }
+
+  vector<double> convert2stl
+    (const arma::vec& source)
+  {
+    vector<double> res(source.n_rows);
+    assert(res.size()>1);
+    for(size_t i=0;i<res.size();++i)
+      res[i] = source[i];
+    return res;
+  }
+
+  vector<double> matmul
+    (const arma::mat& matrix,
+     const vector<double>& y)
+  {
+    return convert2stl(matrix*arma::vec(y));
+  }
+
+  vector<ComputationalCell> unserialiseCells
+    (const vector<vector<double> >& shd)
+  {
+    vector<ComputationalCell> cells(shd[0].size());
+    for(size_t i=0;i<cells.size();++i){
+      ComputationalCell& cell = cells.at(i);
+      cell.density = shd[0][i];
+      cell.pressure = shd[1][i];
+      cell.velocity.x = shd[2][i];
+      cell.velocity.y = shd[3][i];
+    }
+    return cells;
+  }
+}
+
+void Diffusion::operator()(hdsim1D& sim)
+{
+  const double dt = sim.GetTime() - t_prev_;
+  t_prev_ = sim.GetTime();
+  SimulationState1D& ss = sim.getState();
+  vector<vector<double> > shd = serialiseCells(ss.getCells());
+  const vector<double> mid_points = calcMidPoints(ss.getVertices());
+  KwisatzHaderach kh(mid_points,
+		     eta_*mid_points*sqrt(shd[1]/shd[0]));
+  auto transfer_mat = kh.calcTransMat(dt);
+  //auto transfer_mat = kh.cheapTransMat(dt);
+  for(size_t i=0;i<shd.size();++i)
+    shd.at(i) = matmul(transfer_mat, shd.at(i));
+  ss.updateCells(unserialiseCells(shd));
+  sim.recalculateExtensives();
+}

@@ -1,0 +1,67 @@
+#include "fick.hpp"
+#include "derivative_matrix.h"
+
+using std::function;
+
+namespace {
+  mat calcDerivativeMatrix
+  (const vector<double>& x_list,
+   const vector<double>& d_list)
+  {
+    assert(x_list.size()==d_list.size());
+    mat res = arma::zeros<mat>(x_list.size(), x_list.size());
+    const vector<function<double(double,double,double,double,double,double)> >
+		 func_list = {calc_previous, calc_current, calc_next};
+    for(size_t i=1;i<x_list.size()-1;++i){
+      for(size_t j=0;j<3;++j)
+	res(i,i-1+j) = func_list[j](d_list.at(i-1),
+				    d_list.at(i),
+				    d_list.at(i+1),
+				    x_list.at(i-1),
+				    x_list.at(i),
+				    x_list.at(i+1));
+    }
+    return res;
+  }
+}
+
+KwisatzHaderach::KwisatzHaderach
+(const vector<double>& x_list,
+ const vector<double>& d_list):
+  derMat_(calcDerivativeMatrix(x_list, d_list)) {}
+
+const mat& KwisatzHaderach::getDerMat(void) const
+{
+  return derMat_;
+}
+
+double KwisatzHaderach::getDerMatTerm(int i, int j) const
+{
+  return derMat_(i,j);
+}
+
+mat KwisatzHaderach::calcTransMat(double t) const
+{
+  return arma::expmat(t*derMat_);
+}
+
+namespace{
+  vector<double> convert2stl
+    (const arma::vec& source)
+  {
+    vector<double> res(source.n_rows);
+    assert(res.size()>1);
+    for(size_t i=0;i<res.size();++i)
+      res[i] = source[i];
+    return res;
+  }
+}
+
+vector<double> evolve
+(const KwisatzHaderach& kh,
+ const vector<double>& y_list,
+ const double time)
+{
+  const arma::vec init_cond(y_list);
+  return convert2stl(kh.calcTransMat(t)*init_cond);
+}

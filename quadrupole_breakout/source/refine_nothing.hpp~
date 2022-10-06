@@ -1,0 +1,23 @@
+#ifndef REFINENOTHING_HPP
+#define REFINENOTHING_HPP 1
+
+#include "source/newtonian/two_dimensional/amr.hpp"
+
+class RefineNothing: public CellsToRefine
+{
+public:
+  RefineNothing(void);
+
+  ~RefineNothing(void);
+
+  vector<size_t> ToRefine(Tessellation const& tess,
+			  vector<ComputationalCell> const& cells,
+			  double /*time*/) const;
+private:
+};
+
+#endif //REFINENOTHING_HPP
+
+
+  
+  

@@ -1,0 +1,153 @@
+#include <iostream>
+#include <fstream>
+#include "source/newtonian/common/hllc.hpp"
+#include "source/newtonian/common/ideal_gas.hpp"
+#include "source/newtonian/one_dimensional/hdsim.hpp"
+#include "source/newtonian/one_dimensional/pcm1d.hpp"
+#include "source/newtonian/one_dimensional/spatial_distribution1d.hpp"
+#include "source/newtonian/one_dimensional/eulerian1d.hpp"
+#include "source/newtonian/one_dimensional/lagrangian1d.hpp"
+#include "source/newtonian/one_dimensional/rigid_wall_1d.hpp"
+#include "source/newtonian/one_dimensional/zero_force_1d.hpp"
+#include "source/misc/int2str.hpp"
+#include "source/misc/utils.hpp"
+#include "source/newtonian/one_dimensional/hdf5_diagnostics1d.hpp"
+#include "source/newtonian/test_1d/main_loop_1d.hpp"
+#include "source/misc/vector_initialiser.hpp"
+#include "source/newtonian/one_dimensional/hdf5_diagnostics1d.hpp"
+
+// Riemann problem
+
+using namespace std;
+using namespace simulation1d;
+using namespace diagnostics1d;
+
+namespace {
+	
+	
+	
+class SimData
+{
+public:
+  
+  SimData(void):
+    pg_(),
+    vertices_(linspace(-2,2,1000)),
+    interpm_(),
+    density_(1e-3,-0.6,1,1,1e-3),
+    pressure_(1e-9),
+    xvelocity_(0.0,-0.6,1,0.0,0.0),
+    yvelocity_(0),
+    eos_(5./3.),
+    rs_(),
+    //vm_(true),
+	vm_(),
+    bc_(),
+    force_(),
+    sim_(pg_,
+	 vertices_,
+	 interpm_,
+	 density_,
+	 pressure_,
+	 xvelocity_,
+	 yvelocity_,
+	 eos_,
+	 rs_,
+	 vm_,
+	 bc_,
+	 force_) {}
+
+  hdsim1D& getSim(void)
+  {
+    return sim_;
+  }
+
+private:
+  const SlabSymmetry1D pg_;
+  const vector<double> vertices_;
+  PCM1D interpm_;
+  const TwoSteps density_;
+  const Uniform pressure_;
+  const TwoSteps xvelocity_;
+  const Uniform yvelocity_;
+  const IdealGas eos_;
+  const Hllc rs_;
+  //const Lagrangian1D vm_;
+  const Eulerian1D vm_;
+  const RigidWall1D bc_;
+  const ZeroForce1D force_;
+  hdsim1D sim_;
+};
+
+class MultipleDiagnostics: public DiagnosticsFunction
+{
+	public:
+	   explicit MultipleDiagnostics(const vector<DiagnosticsFunction*>& diag_list):
+	       diag_list_(diag_list) {}
+	   
+	   void diagnose(const hdsim1D& sim)
+	   {
+		   for(size_t i=0;i<diag_list_.size();++i)
+			   (*diag_list_.at(i)).diagnose(sim);
+	   }
+	   
+	   ~MultipleDiagnostics(void)
+	   {
+		   for(size_t i=0;i<diag_list_.size();++i)
+			   delete diag_list_.at(i);
+	   }
+	
+	private:
+	  const vector<DiagnosticsFunction*> diag_list_;
+};
+
+class ConsecutiveSnapshots: public DiagnosticsFunction
+{
+	public:
+	
+	    ConsecutiveSnapshots(double dt):
+		    dt_(dt), t_next_(0), index_(0) {}
+		
+		void diagnose(const hdsim1D& sim)
+		{
+			if(sim.GetTime()>t_next_){
+				write_snapshot_to_hdf5(sim,"output/snapshot_"+int2str(index_)+".h5");
+				++index_;
+				t_next_ += dt_;
+			}
+		}
+	     
+	
+	private:
+	   const double dt_;
+	   mutable double t_next_;
+	   mutable int index_;
+};
+
+void my_main_loop(hdsim1D& sim)
+	{
+	  const int max_iter = 1e7;
+	  const double tf = 2e0;
+	  SafeTimeTermination term_cond(tf,max_iter);
+
+	  MultipleDiagnostics diag
+	    (VectorInitialiser<DiagnosticsFunction*>()
+	     (new ConsecutiveSnapshots(tf/100))
+	     (new WriteTime("time.txt"))());
+
+	  main_loop(sim,
+		    term_cond,
+		    1,
+		    &diag);
+	}
+}
+
+int main(void)
+{
+  SimData sim_data;
+  hdsim1D& sim = sim_data.getSim();
+			
+  my_main_loop(sim);
+	
+  return 0;
+}

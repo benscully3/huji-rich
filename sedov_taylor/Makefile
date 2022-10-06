@@ -1,0 +1,26 @@
+SRC_DIR = ./source
+OBJ_DIR = ./build
+SRC_FILES = $(wildcard $(SRC_DIR)/*.cpp)
+OBJ_FILES = $(patsubst $(SRC_DIR)/%.cpp, $(OBJ_DIR)/%.o, $(SRC_FILES))
+ifeq ($(MODE),debug)
+LINT_FLAGS = -g
+RICH_LIB = $(RICH_ROOT)/library_debug/librich.a
+else
+LINT_FLAGS = -Werror -Wall -Wextra -pedantic -Wno-long-long -Wfatal-errors -Weffc++ -Wshadow -Wmissing-declarations -Wconversion -O3 -march=native
+RICH_LIB = $(RICH_ROOT)/library_production/librich.a
+endif
+LINK_FLAGS = 
+CXX = g++
+build/rich.exe: $(OBJ_DIR)/interface_derivative.o $(OBJ_FILES)
+	echo $(MODE)
+	$(CXX)  $^ $(RICH_LIB) -L $(HDF5_LIB_PATH) -lhdf5 -lhdf5_cpp -lz -lclipper -o $@ 
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
+	$(CXX) -c $< $(LINT_FLAGS) -o $@ -I $(RICH_ROOT)
+$(OBJ_DIR)/interface_derivative.o: $(SRC_DIR)/interface_derivative.c
+	$(CXX) -c $< $(LINT_FLAGS) -o $@ -I $(RICH_ROOT)
+$(SRC_DIR)/interface_matrix.c:
+	python3.8 interface_derivative.py
+	mv interface_derivative.c $(SRC_DIR)
+	mv interface_derivative.h $(SRC_DIR)
+build:
+	mkdir build

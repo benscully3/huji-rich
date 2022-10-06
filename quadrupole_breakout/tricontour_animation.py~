@@ -1,0 +1,56 @@
+def main():
+
+    import glob
+    import re
+    import numpy
+    import h5py
+    from tqdm import tqdm
+    import imageio
+    from joblib import Parallel, delayed
+
+    def extract_snapshot_number(fpath):
+
+        return int(re.search(r'_(\d+).',fpath).group(1))
+        
+    def snapshot2image(fname):
+
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot
+        matplotlib.pyplot.rcParams['image.cmap'] = 'PuBu'
+        import pylab    
+        matplotlib.pyplot.rcParams['image.cmap'] = 'PuBu'
+
+        with h5py.File(fname,'r') as f:
+            p = numpy.array(f['hydrodynamic']['pressure'])
+            rho = numpy.array(f['hydrodynamic']['density'])
+            T = p/rho
+            bs = rho**2*numpy.sqrt(T)
+            pylab.tricontourf(f['geometry']['x_coordinate'],
+                           f['geometry']['y_coordinate'],
+                           numpy.log10(rho),
+                           50)
+            pylab.title('t = %1.4f' % numpy.array(f['time'])[0])
+            pylab.colorbar()
+            pylab.axis('scaled')
+            pylab.xlim((-3,3))
+            pylab.ylim((-2,2))
+            pylab.clim((-3,2))
+            pylab.savefig(fname.replace('.h5','.png'))
+            pylab.close()
+
+    ss_files = sorted(glob.glob('output/snapshot_*.h5'),
+                      key=extract_snapshot_number)
+    #[snapshot2image(fname) for fname in tqdm(ss_files)]
+    Parallel(n_jobs=-1)(delayed(snapshot2image)(fname) for fname in tqdm(ss_files))
+
+    with imageio.get_writer('contour.gif',
+                            mode='I',
+                            duration=0.1) as writer:
+        for fname in tqdm(ss_files):
+            image = imageio.imread(fname.replace('.h5','.png'))
+            writer.append_data(image)
+
+if __name__ == '__main__':
+
+    main()

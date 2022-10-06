@@ -1,0 +1,12 @@
+#ifndef DIFFUSION_HPP
+#define DIFFUSION_HPP 1
+
+class Diffusion: public Manipulate
+{
+public:
+
+private:
+  const double eta_;
+};
+
+#endif // DIFFUSION_HPP

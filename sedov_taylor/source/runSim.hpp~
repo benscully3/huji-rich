@@ -1,0 +1,6 @@
+#ifndef RUNSIM_HPP
+#define RUNSIM_HPP 1
+
+void runSim(hdsim1D& sim);
+
+#endif // RUNSIM_HPP

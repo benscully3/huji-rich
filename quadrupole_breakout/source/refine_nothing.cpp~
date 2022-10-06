@@ -1,0 +1,16 @@
+#include "refine_nothing.hpp"
+#include <iostream>
+
+
+
+RefineNothing::RefineNothing(void){}
+
+vector<size_t> RefineNothing::ToRefine(Tessellation const& /*tess*/,
+				       vector<ComputationalCell> const& /*cells*/,
+				       double /*time*/) const
+{
+  vector<size_t> res = {};
+  return res;
+}
+
+RefineNothing::~RefineNothing(void){}
